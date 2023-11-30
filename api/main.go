@@ -5,6 +5,7 @@ import (
 	"Go_Projects/api/cache"
 	"Go_Projects/api/entity"
 	"Go_Projects/api/repository"
+	"Go_Projects/api/service"
 	"database/sql"
 	"encoding/json"
 	"fmt"
@@ -23,6 +24,7 @@ func main() {
 	connectDB()
 
 	cityRepo := repository.NewRepo(db)
+	cityService := service.NewCityService(cityRepo)
 	rabbitMQ := brokers.NewRabbitMQ()
 	redis := cache.NewRedis()
 	http.HandleFunc("/city/findAll", func(writer http.ResponseWriter, request *http.Request) {
@@ -39,7 +41,7 @@ func main() {
 		}
 
 		fmt.Println("Cities cache de yok")
-		cityList := cityRepo.List()
+		cityList := cityService.GetAllCities()
 		cityListBytes, _ := json.Marshal(cityList)
 
 		go func(data []byte) {
@@ -58,12 +60,11 @@ func main() {
 
 		cityIdStr := request.URL.Query().Get("id")
 		cityId, _ := strconv.Atoi(cityIdStr)
-		city := cityRepo.GetById(cityId)
+		city := cityService.GetCityById(cityId)
 		if city == nil {
 			http.Error(writer, "not found", http.StatusNotFound)
 			return
 		} else {
-			fmt.Println("girdi :(")
 			json.NewEncoder(writer).Encode(city)
 		}
 	})
@@ -87,7 +88,7 @@ func main() {
 			return
 		}
 
-		cityRepo.Insert(city)
+		cityService.SaveCity(city)
 		rabbitMQ.Publish([]byte("city created with name: " + city.Name))
 		writer.WriteHeader(http.StatusCreated)
 	})
